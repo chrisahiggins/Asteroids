@@ -144,8 +144,11 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
     Random rand = new Random();
 
     int score = 0;
+    int help = 0;
     boolean paused = false;
     boolean gameOver = false;
+    boolean starting = true;
+
 
     public GamePanel(int w, int h) {
         WIDTH = w; HEIGHT = h;
@@ -380,7 +383,15 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
         g2.drawString("Level: " + (1 + score/1000), 10, 60);
 
         if (paused) {
-            drawCenteredText(g2, "PAUSED - press P to continue", WIDTH/2, HEIGHT/2, 24);
+            drawCenteredText(g2, "PAUSED - press P to continue", WIDTH/2, HEIGHT/2-20, 24);
+            drawCenteredText(g2, "Cursor left/right to steer, up for thrust & space to fire", WIDTH/2, HEIGHT/2+20, 18);
+        }
+
+        if (starting) {
+            drawCenteredText(g2, "Cursor left/right to steer, up for thrust & space to fire", WIDTH/2, HEIGHT/2-20, 18);
+            drawCenteredText(g2, "(P for pause)", WIDTH/2, HEIGHT/2+20, 18);
+          if (help < 200) ++help;
+          else starting = false;
         }
 
         if (gameOver) {
