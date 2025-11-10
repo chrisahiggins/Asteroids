@@ -14,4 +14,4 @@
 
 ## Execuable JAR
 
-[Click to Download](target/Asteroids-1.0-SNAPSHOT.jar "download")
+[Click to Download](https://github.com/chrisahiggins/Asteroids/raw/master/target/Asteroids-1.0-SNAPSHOT.jar)
