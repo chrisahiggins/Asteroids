@@ -12,6 +12,6 @@
 
 ##### **- R**: restart after game over
 
-## Execuable JAR
+## Executable JAR
 
 [Click to Download](https://github.com/chrisahiggins/Asteroids/raw/master/target/Asteroids-1.0-SNAPSHOT.jar)
