@@ -2,12 +2,12 @@
 
 ## Controls
 
-Left / Right arrows: rotate ship
+**Left / Right arrows**: rotate ship
 
-Up arrow: thrust forward
+**Up arrow**: thrust forward
 
-Space: fire bullet
+**Space**: fire bullet
 
-P: pause / unpause
+**P**: pause / unpause
 
-R: restart after game over
+**R**: restart after game over
