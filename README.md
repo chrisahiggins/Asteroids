@@ -14,4 +14,4 @@
 
 ## Execuable JAR
 
-[Click to Download](https://www.google.com)
+[Click to Download](https://github.com/chrisahiggins/Asteroids/blob/master/target/Asteroids-1.0-SNAPSHOT.jar)
