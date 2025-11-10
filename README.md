@@ -11,3 +11,7 @@
 **P**: pause / unpause
 
 **R**: restart after game over
+
+## Execuable JAR
+
+[Click to Download](https://www.google.com)
