@@ -388,9 +388,9 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
         }
 
         if (starting) {
-            drawCenteredText(g2, "Cursor left/right to steer, up for thrust & space to fire", WIDTH/2, HEIGHT/2-20, 18);
-            drawCenteredText(g2, "(P for pause)", WIDTH/2, HEIGHT/2+20, 18);
-          if (help < 200) ++help;
+            drawCenteredText(g2, "Cursor left/right to steer, up for thrust & space to fire", WIDTH/2, HEIGHT-40, 18);
+            drawCenteredText(g2, "(P for pause)", WIDTH/2, HEIGHT-20, 18);
+          if (help < 400) ++help;
           else starting = false;
         }
 
