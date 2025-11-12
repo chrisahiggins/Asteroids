@@ -14,4 +14,4 @@
 
 ## Executable JAR
 
-[Click to Download](https://github.com/chrisahiggins/Asteroids/packages/2734653)
+[Click to Download](https://github.com/chrisahiggins/Asteroids/packages/2735092)
