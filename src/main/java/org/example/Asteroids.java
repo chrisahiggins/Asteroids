@@ -171,6 +171,8 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
     boolean paused = false;
     boolean gameOver = false;
     boolean starting = true;
+    boolean introScreen = true;
+    int introBlink = 0;
 
     List<HighScore> highScores = Leaderboard.load();
     boolean enteringName = false;
@@ -219,7 +221,7 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
 
     @Override
     public void actionPerformed(ActionEvent e) {
-        if (!paused && !gameOver) updateGame();
+        if (!introScreen && !paused && !gameOver) updateGame();
         repaint();
     }
 
@@ -504,6 +506,12 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
         Graphics2D g2 = (Graphics2D) g.create();
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
+        if (introScreen) {
+            drawIntroScreen(g2);
+            g2.dispose();
+            return;
+        }
+
         // draw ship (with wrap copies if close to edge)
         drawShip(g2, ship.pos.x, ship.pos.y, ship.angle, ship.thrusting, ship.invulnerable);
 
@@ -666,6 +674,32 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
         if (x > WIDTH - margin && y > HEIGHT - margin) d.draw(x - WIDTH, y - HEIGHT);
     }
 
+    private void drawIntroScreen(Graphics2D g2) {
+        int cx = WIDTH / 2;
+
+        // Decorative title-screen asteroid
+        Polygon deco = new Polygon(
+                new int[]{-50, -20, 25, 50, 30, -10, -45},
+                new int[]{-10, -45, -35, 0, 40, 45, 20}, 7);
+        AffineTransform at = g2.getTransform();
+        g2.translate(cx, HEIGHT/2 - 40);
+        g2.setColor(Color.LIGHT_GRAY);
+        g2.drawPolygon(deco);
+        g2.setTransform(at);
+
+        drawCenteredText(g2, "ASTEROIDS", cx, HEIGHT/2 - 130, 48);
+        drawCenteredText(g2, "Blast through asteroid fields, dodge alien saucers,", cx, HEIGHT/2 + 70, 16);
+        drawCenteredText(g2, "and chase the high score!", cx, HEIGHT/2 + 92, 16);
+
+        drawCenteredText(g2, "Controls:", cx, HEIGHT/2 + 124, 16);
+        drawCenteredText(g2, "Left / Right - rotate     Up - thrust     Space - fire     P - pause", cx, HEIGHT/2 + 146, 14);
+
+        if ((introBlink / 30) % 2 == 0) {
+            drawCenteredText(g2, "Press any key to start", cx, HEIGHT - 40, 20);
+        }
+        introBlink++;
+    }
+
     private void drawLeaderboard(Graphics2D g2, int cx, int topY) {
         int y = topY + 28;
         drawCenteredText(g2, "-- LEADERBOARD --", cx, y, 18);
@@ -703,6 +737,12 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
     @Override
     public void keyPressed(KeyEvent e) {
         int k = e.getKeyCode();
+
+        if (introScreen) {
+            introScreen = false;
+            Heartbeat.start(this); // 🔊 start heartbeat once gameplay begins
+            return;
+        }
 
         if (gameOver && enteringName) {
             if (k == KeyEvent.VK_BACK_SPACE) {
