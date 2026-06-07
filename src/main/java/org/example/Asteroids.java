@@ -172,6 +172,11 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
     boolean gameOver = false;
     boolean starting = true;
 
+    List<HighScore> highScores = Leaderboard.load();
+    boolean enteringName = false;
+    boolean nameSubmitted = false;
+    StringBuilder nameInput = new StringBuilder();
+
 
     public GamePanel(int w, int h) {
         WIDTH = w; HEIGHT = h;
@@ -325,7 +330,7 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
                         Sound.playExplosion();
                         ship.lives--;
                         if (ship.lives <= 0) {
-                            gameOver = true;
+                            triggerGameOver();
                         } else {
                             ship.reset(WIDTH, HEIGHT);
                         }
@@ -347,7 +352,7 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
                         it.remove();
                         Sound.playExplosion();
                         ship.lives--;
-                        if (ship.lives <= 0) gameOver = true;
+                        if (ship.lives <= 0) triggerGameOver();
                         else ship.reset(WIDTH, HEIGHT);
                         break;
                     }
@@ -383,6 +388,14 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
             spawnLevel(4 + (score/1000)); // more asteroids as score grows
             ship.reset(WIDTH, HEIGHT);
         }
+    }
+
+    private void triggerGameOver() {
+        if (gameOver) return;
+        gameOver = true;
+        nameSubmitted = false;
+        nameInput.setLength(0);
+        enteringName = Leaderboard.qualifies(highScores, score);
     }
 
     private void shoot() {
@@ -436,7 +449,7 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
                 Sound.playExplosion();
                 ship.lives--;
                 saucer = null;
-                if (ship.lives <= 0) gameOver = true;
+                if (ship.lives <= 0) triggerGameOver();
                 else ship.reset(WIDTH, HEIGHT);
                 return;
             }
@@ -558,8 +571,15 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
         }
 
         if (gameOver) {
-            drawCenteredText(g2, "GAME OVER - press R to restart", WIDTH/2, HEIGHT/2 - 20, 28);
-            drawCenteredText(g2, "Final score: " + score, WIDTH/2, HEIGHT/2 + 20, 18);
+            if (enteringName) {
+                drawCenteredText(g2, "NEW HIGH SCORE! Final score: " + score, WIDTH/2, HEIGHT/2 - 60, 22);
+                drawCenteredText(g2, "Enter your name: " + nameInput + "_", WIDTH/2, HEIGHT/2 - 30, 20);
+                drawCenteredText(g2, "(press ENTER to submit, max 12 characters)", WIDTH/2, HEIGHT/2 - 8, 14);
+            } else {
+                drawCenteredText(g2, "GAME OVER - press R to restart", WIDTH/2, HEIGHT/2 - 60, 28);
+                drawCenteredText(g2, "Final score: " + score, WIDTH/2, HEIGHT/2 - 34, 18);
+            }
+            drawLeaderboard(g2, WIDTH/2, HEIGHT/2 - 4);
         }
 
         g2.dispose();
@@ -646,6 +666,28 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
         if (x > WIDTH - margin && y > HEIGHT - margin) d.draw(x - WIDTH, y - HEIGHT);
     }
 
+    private void drawLeaderboard(Graphics2D g2, int cx, int topY) {
+        int y = topY + 28;
+        drawCenteredText(g2, "-- LEADERBOARD --", cx, y, 18);
+        y += 22;
+        if (highScores.isEmpty()) {
+            drawCenteredText(g2, "(no scores yet)", cx, y, 14);
+            return;
+        }
+        Font old = g2.getFont();
+        g2.setFont(new Font("Monospaced", Font.PLAIN, 14));
+        FontMetrics fm = g2.getFontMetrics();
+        for (int i = 0; i < highScores.size() && i < 10; i++) {
+            HighScore hs = highScores.get(i);
+            String line = String.format("%2d. %-12s %6d", i + 1, hs.name, hs.score);
+            int tw = fm.stringWidth(line);
+            g2.setColor(Color.WHITE);
+            g2.drawString(line, cx - tw/2, y);
+            y += 16;
+        }
+        g2.setFont(old);
+    }
+
     private void drawCenteredText(Graphics2D g2, String text, int x, int y, int size) {
         Font old = g2.getFont();
         g2.setFont(new Font(old.getName(), Font.BOLD, size));
@@ -661,12 +703,26 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
     @Override
     public void keyPressed(KeyEvent e) {
         int k = e.getKeyCode();
+
+        if (gameOver && enteringName) {
+            if (k == KeyEvent.VK_BACK_SPACE) {
+                if (nameInput.length() > 0) nameInput.deleteCharAt(nameInput.length() - 1);
+            } else if (k == KeyEvent.VK_ENTER) {
+                String name = nameInput.toString().trim();
+                if (name.isEmpty()) name = "PLAYER";
+                highScores = Leaderboard.addAndSave(highScores, name, score);
+                enteringName = false;
+                nameSubmitted = true;
+            }
+            return; // swallow gameplay input while typing a name
+        }
+
         if (k == KeyEvent.VK_LEFT) left = true;
         if (k == KeyEvent.VK_RIGHT) right = true;
         if (k == KeyEvent.VK_UP) up = true;
         if (k == KeyEvent.VK_SPACE) shootPressed = true;
         if (k == KeyEvent.VK_P) paused = !paused;
-        if (k == KeyEvent.VK_R && gameOver) {
+        if (k == KeyEvent.VK_R && gameOver && !enteringName) {
             // restart
             score = 0;
             ship = new Ship(WIDTH, HEIGHT);
@@ -691,7 +747,82 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
         if (k == KeyEvent.VK_SPACE) shootPressed = false;
     }
 
-    @Override public void keyTyped(KeyEvent e) { }
+    @Override
+    public void keyTyped(KeyEvent e) {
+        if (gameOver && enteringName) {
+            char c = e.getKeyChar();
+            if (nameInput.length() < 12 && (Character.isLetterOrDigit(c) || c == ' ' || c == '_' || c == '-')) {
+                nameInput.append(Character.toUpperCase(c));
+            }
+        }
+    }
+}
+
+/* ---------- Persistent high-score leaderboard ---------- */
+class HighScore {
+    String name;
+    int score;
+
+    public HighScore(String name, int score) {
+        this.name = name;
+        this.score = score;
+    }
+}
+
+class Leaderboard {
+    private static final int MAX_ENTRIES = 10;
+    private static final java.io.File FILE =
+            new java.io.File(System.getProperty("user.home"), ".asteroids_highscores.txt");
+
+    public static List<HighScore> load() {
+        List<HighScore> list = new ArrayList<>();
+        if (!FILE.exists()) return list;
+        try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(FILE))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                int idx = line.lastIndexOf(',');
+                if (idx <= 0) continue;
+                try {
+                    String name = line.substring(0, idx).trim();
+                    int score = Integer.parseInt(line.substring(idx + 1).trim());
+                    list.add(new HighScore(name, score));
+                } catch (NumberFormatException ignored) { }
+            }
+        } catch (java.io.IOException ignored) { }
+        sort(list);
+        return list;
+    }
+
+    public static void save(List<HighScore> list) {
+        sort(list);
+        try (java.io.PrintWriter w = new java.io.PrintWriter(new java.io.FileWriter(FILE))) {
+            for (int i = 0; i < Math.min(list.size(), MAX_ENTRIES); i++) {
+                HighScore hs = list.get(i);
+                w.println(hs.name + "," + hs.score);
+            }
+        } catch (java.io.IOException ignored) { }
+    }
+
+    /* Returns true if 'score' is good enough to make the (persisted) leaderboard */
+    public static boolean qualifies(List<HighScore> list, int score) {
+        if (score <= 0) return false;
+        if (list.size() < MAX_ENTRIES) return true;
+        return score > list.get(list.size() - 1).score;
+    }
+
+    /* Inserts the new score, trims to MAX_ENTRIES, sorts, and persists */
+    public static List<HighScore> addAndSave(List<HighScore> list, String name, int score) {
+        List<HighScore> updated = new ArrayList<>(list);
+        updated.add(new HighScore(name, score));
+        sort(updated);
+        if (updated.size() > MAX_ENTRIES) updated = updated.subList(0, MAX_ENTRIES);
+        save(updated);
+        return updated;
+    }
+
+    private static void sort(List<HighScore> list) {
+        list.sort((a, b) -> Integer.compare(b.score, a.score));
+    }
 }
 
 /* ---------- Retro sound synthesizer ---------- */
