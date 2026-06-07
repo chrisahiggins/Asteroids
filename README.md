@@ -12,6 +12,6 @@
 
 ##### **- R**: restart after game over
 
-## Executable JAR
+## Executable JAR - click on JAR to download.
 
 [Click to Download](https://github.com/chrisahiggins/Asteroids/packages/2735092)
