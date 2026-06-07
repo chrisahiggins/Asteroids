@@ -127,6 +127,26 @@ class Asteroid {
     }
 }
 
+class Saucer {
+    Vec pos;
+    Vec vel;
+    int size; // 2 = large, 1 = small
+    double radius;
+    int shootCooldown = 60;
+    int dirChangeTimer;
+    Random rand = new Random();
+
+    public Saucer(Vec pos, int size, int screenW) {
+        this.pos = pos.copy();
+        this.size = size;
+        this.radius = size == 2 ? 20 : 12;
+        double speed = size == 2 ? 1.5 : 2.5;
+        double dir = pos.x < screenW / 2.0 ? 1 : -1;
+        this.vel = new Vec(dir * speed, 0);
+        this.dirChangeTimer = 60 + rand.nextInt(60);
+    }
+}
+
 /* ---------- Game panel and main loop ---------- */
 class GamePanel extends JPanel implements ActionListener, KeyListener {
     final int WIDTH, HEIGHT;
@@ -136,6 +156,9 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
     Ship ship;
     List<Bullet> bullets = Collections.synchronizedList(new ArrayList<>());
     List<Asteroid> asteroids = Collections.synchronizedList(new ArrayList<>());
+    List<Bullet> saucerBullets = Collections.synchronizedList(new ArrayList<>());
+    Saucer saucer = null;
+    int saucerSpawnTimer = 600; // frames until first saucer
 
     boolean left, right, up, shootPressed;
     int shootCooldown = 0;
@@ -312,6 +335,49 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
             }
         }
 
+        // collisions: saucer bullets -> ship
+        if (!ship.invulnerable) {
+            synchronized (saucerBullets) {
+                Iterator<Bullet> it = saucerBullets.iterator();
+                while (it.hasNext()) {
+                    Bullet b = it.next();
+                    double dx = ship.pos.x - b.pos.x;
+                    double dy = ship.pos.y - b.pos.y;
+                    if (dx*dx + dy*dy <= ship.radius*ship.radius) {
+                        it.remove();
+                        Sound.playExplosion();
+                        ship.lives--;
+                        if (ship.lives <= 0) gameOver = true;
+                        else ship.reset(WIDTH, HEIGHT);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // saucer spawning
+        if (saucer == null) {
+            saucerSpawnTimer--;
+            if (saucerSpawnTimer <= 0) {
+                spawnSaucer();
+                saucerSpawnTimer = 900 + rand.nextInt(600);
+            }
+        } else {
+            updateSaucer();
+        }
+
+        // saucer bullets
+        synchronized (saucerBullets) {
+            Iterator<Bullet> it = saucerBullets.iterator();
+            while (it.hasNext()) {
+                Bullet b = it.next();
+                b.pos.add(b.vel);
+                wrap(b.pos);
+                b.life--;
+                if (b.isDead()) it.remove();
+            }
+        }
+
         // if all asteroids cleared -> next level
         if (asteroids.isEmpty()) {
             spawnLevel(4 + (score/1000)); // more asteroids as score grows
@@ -325,6 +391,89 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
         Vec bPos = new Vec(ship.pos.x + Math.cos(ship.angle)*ship.radius*1.5, ship.pos.y + Math.sin(ship.angle)*ship.radius*1.5);
         bullets.add(new Bullet(bPos, bVel));
         Sound.playLaser(); // 🔊 add this line
+    }
+
+    private void spawnSaucer() {
+        boolean fromLeft = rand.nextBoolean();
+        double y = 30 + rand.nextDouble() * (HEIGHT - 60);
+        Vec p = new Vec(fromLeft ? 0 : WIDTH, y);
+        int size = rand.nextBoolean() ? 2 : 1;
+        saucer = new Saucer(p, size, WIDTH);
+        Sound.playSaucer();
+    }
+
+    private void updateSaucer() {
+        saucer.pos.add(saucer.vel);
+        saucer.pos.y += Math.sin(saucer.pos.x * 0.05) * 0.5; // gentle weave
+
+        saucer.dirChangeTimer--;
+        if (saucer.dirChangeTimer <= 0) {
+            saucer.vel.y = (rand.nextDouble() - 0.5) * 2.0;
+            saucer.dirChangeTimer = 60 + rand.nextInt(60);
+        }
+        if (saucer.pos.y < 0) saucer.pos.y = 0;
+        if (saucer.pos.y > HEIGHT) saucer.pos.y = HEIGHT;
+
+        // remove once it exits the far side
+        if ((saucer.vel.x > 0 && saucer.pos.x > WIDTH + saucer.radius) ||
+            (saucer.vel.x < 0 && saucer.pos.x < -saucer.radius)) {
+            saucer = null;
+            return;
+        }
+
+        // shooting
+        saucer.shootCooldown--;
+        if (saucer.shootCooldown <= 0) {
+            saucerShoot();
+            saucer.shootCooldown = saucer.size == 2 ? 90 : 60;
+        }
+
+        // collisions: saucer <-> ship
+        if (!ship.invulnerable) {
+            double dx = ship.pos.x - saucer.pos.x;
+            double dy = ship.pos.y - saucer.pos.y;
+            if (dx*dx + dy*dy <= (ship.radius + saucer.radius)*(ship.radius + saucer.radius)) {
+                Sound.playExplosion();
+                ship.lives--;
+                saucer = null;
+                if (ship.lives <= 0) gameOver = true;
+                else ship.reset(WIDTH, HEIGHT);
+                return;
+            }
+        }
+
+        // collisions: player bullets -> saucer
+        synchronized (bullets) {
+            Iterator<Bullet> bit = bullets.iterator();
+            while (bit.hasNext()) {
+                Bullet b = bit.next();
+                double dx = b.pos.x - saucer.pos.x;
+                double dy = b.pos.y - saucer.pos.y;
+                if (dx*dx + dy*dy <= saucer.radius*saucer.radius) {
+                    bit.remove();
+                    Sound.playExplosion();
+                    score += saucer.size == 2 ? 200 : 1000;
+                    saucer = null;
+                    break;
+                }
+            }
+        }
+    }
+
+    private void saucerShoot() {
+        double angle;
+        if (saucer.size == 2) {
+            angle = rand.nextDouble() * 2 * Math.PI; // large saucer fires randomly
+        } else {
+            // small saucer aims roughly at the ship
+            angle = Math.atan2(ship.pos.y - saucer.pos.y, ship.pos.x - saucer.pos.x);
+            angle += (rand.nextDouble() - 0.5) * 0.4; // some inaccuracy
+        }
+        double speed = 5.0;
+        Vec bVel = new Vec(Math.cos(angle) * speed, Math.sin(angle) * speed);
+        Vec bPos = new Vec(saucer.pos.x + Math.cos(angle) * saucer.radius, saucer.pos.y + Math.sin(angle) * saucer.radius);
+        saucerBullets.add(new Bullet(bPos, bVel));
+        Sound.playLaser();
     }
 
     private void wrap(Vec p) {
@@ -372,6 +521,19 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
                     g2.drawPolygon(a.shape);
                     g2.setTransform(t2);
                 }, a.pos);
+            }
+        }
+
+        // draw saucer
+        if (saucer != null) {
+            drawSaucer(g2, saucer);
+        }
+
+        // draw saucer bullets
+        g2.setColor(Color.RED);
+        synchronized (saucerBullets) {
+            for (Bullet b : saucerBullets) {
+                drawWrapped(g2, (gx, gy) -> g2.fillOval((int)(gx-2), (int)(gy-2), 4, 4), b.pos);
             }
         }
 
@@ -441,6 +603,29 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
         }, ship.pos);
     }
 
+    private void drawSaucer(Graphics2D g2, Saucer s) {
+        double r = s.radius;
+        Polygon hull = new Polygon(
+                new int[]{(int)-r, (int)(-r*0.4), (int)(r*0.4), (int)r, (int)(r*0.4), (int)(-r*0.4)},
+                new int[]{0, (int)(-r*0.35), (int)(-r*0.35), 0, (int)(r*0.35), (int)(r*0.35)}, 6);
+        Polygon cockpit = new Polygon(
+                new int[]{(int)(-r*0.4), (int)(-r*0.2), (int)(r*0.2), (int)(r*0.4)},
+                new int[]{(int)(-r*0.35), (int)(-r*0.7), (int)(-r*0.7), (int)(-r*0.35)}, 4);
+        g2.setColor(Color.GREEN);
+        drawWrapped(g2, (gx, gy) -> {
+            AffineTransform t = g2.getTransform();
+            g2.translate(gx, gy);
+            g2.drawPolygon(hull);
+            g2.drawPolygon(cockpit);
+            g2.setTransform(t);
+        }, s.pos);
+        AffineTransform t = g2.getTransform();
+        g2.translate(s.pos.x, s.pos.y);
+        g2.drawPolygon(hull);
+        g2.drawPolygon(cockpit);
+        g2.setTransform(t);
+    }
+
     /* Helper: draw a thing also on wrapped positions when near edges */
     private interface DrawAt {
         void draw(double gx, double gy);
@@ -486,6 +671,9 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
             ship = new Ship(WIDTH, HEIGHT);
             ship.lives = 3;
             bullets.clear();
+            saucerBullets.clear();
+            saucer = null;
+            saucerSpawnTimer = 600;
             asteroids.clear();
             spawnLevel(4);
             gameOver = false;
@@ -569,6 +757,12 @@ class Sound {
     public static void playThrust() {
         // lower square wave with fade
         byte[] buf = squareWave(180, 120, 0.5, 1.0);
+        playBuffer(buf);
+    }
+
+    public static void playSaucer() {
+        // warbling square wave to signal saucer arrival
+        byte[] buf = squareWave(220, 250, 0.6, 0.9);
         playBuffer(buf);
     }
 
