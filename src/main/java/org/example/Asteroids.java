@@ -533,6 +533,7 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
         g2.setColor(Color.RED);
         synchronized (saucerBullets) {
             for (Bullet b : saucerBullets) {
+                g2.fillOval((int)(b.pos.x-2), (int)(b.pos.y-2), 4, 4);
                 drawWrapped(g2, (gx, gy) -> g2.fillOval((int)(gx-2), (int)(gy-2), 4, 4), b.pos);
             }
         }
